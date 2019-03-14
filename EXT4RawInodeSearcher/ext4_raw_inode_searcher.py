@@ -1,13 +1,13 @@
 # This program is raw inode searcher for any files in EXT4 systems.
 # You need to give it two arguments: path to your file and name of your device
 # in /dev/ folder (such as /dev/sda1). Then program will search its raw inode
-# data in file system.
+# data in file system ext4.
 
 # This program must be executed by SUPERUSER (due to access to /dev/) and only in Python 2.7
 # Documentation: https://ext4.wiki.kernel.org/index.php/Ext4_Disk_Layout
 
 '''
-Copyright (c) 2019 Denis Novac, Egor Maximov
+Copyright (c) 2019 UrFU, Denis Yablochkin (yd.novac@gmail.com), Egor Maximov
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -36,9 +36,9 @@ INODE="Inode: " # This is how your system calls Inode field in STAT utility
 # This method is just for reading stat utility output. You may comment the call
 # from main function and then write your inode number in inodeNum variable
 def readInodeNumber ( path ):
-    bashCommand = "stat "+path+" > ./output.txt"
+    bashCommand = "stat "+path+" > ./stat.txt"
     os.system(bashCommand)
-    file=open("./output.txt","r")
+    file=open("./stat.txt","r")
     searchInode=[ ]
     inodeNum=""
     carret=len(INODE)
@@ -56,7 +56,7 @@ def readInodeNumber ( path ):
                 inodeNum=inodeNum+char
     inodeNum=int(inodeNum)
     file.close()
-    bashCommand = "rm ./output.txt"
+    bashCommand = "rm ./stat.txt"
     os.system(bashCommand)
     return inodeNum
 
@@ -92,15 +92,19 @@ def readSuperblockInfo ( pathToDevice ):
 
 
 def toNumber ( hexList ):
-    if len(hexList)==8:length="LL"
+    # This method is for converting bytes.
+    # Letter L stands for unsigned long, H - unsigned short. This is not
+    # important for Python (but it is usable for converting from C)
+    # The L means 4 bytes, H means 2 bytes.
+    # < means converting from little-endian
     if len(hexList)==4:length="L"
     if len(hexList)==2:length="H"
     out=struct.unpack("<"+length,hexList)
+    # unpack gives list such as (2,0), we need only first number.
     out=int(out[0])
     return out
 
 
-# thanks to Egor
 def findInodeTableOffset ( pathToDevice, inodeNum, sb_info ):
     s_inodes_per_group=sb_info[1]
     block_size=sb_info[3]
@@ -125,7 +129,7 @@ def findInodeTableOffset ( pathToDevice, inodeNum, sb_info ):
     bg_inode_table_lo=bytes[0x8:0x8+4]
     bg_inode_table_hi=bytes[0x28:0x28+4]
 
-    # here we make one number from parts in BIG ENDIAN (because of reversed)
+    # here we make one number from parts in BIG ENDIAN (we used reversed)
     bg_inode_table=list(reversed(bg_inode_table_hi))+list(reversed(bg_inode_table_lo))
     inode_table_block_string="".join(bg_inode_table)
 
@@ -157,14 +161,13 @@ def readInode ( pathToDevice, sb_info, inodeNum, inode_table_offset ):
     file.seek(inode_table_offset+rel_inode_offset)
     bytes=file.read(s_inode_size)
     file.close()
-    print("INODE OF FILE: ")
+    print("RAW INODE OF FILE: ")
     print(bytes.encode('hex'))
 
-    # writing to binary file
+    # writing to binary file for analysis
     f = open("output.bin","w+b")
     f.write(bytes)
     f.close()
-
     return 1
 
 
@@ -199,6 +202,7 @@ def main ( args ):
     print("Inode table offset: "+str(inode_table_offset))
 
     readInode(pathToDevice,sb_info,inodeNum,inode_table_offset)
+    print("")
     print("SEE THE OUTPUT.BIN FILE FOR ANALYSIS OF YOUR INODE")
 
 
